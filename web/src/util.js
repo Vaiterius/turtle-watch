@@ -4,8 +4,67 @@ export const DAY = 86400
 
 export const toF = (celsius) => (celsius * 9) / 5 + 32
 
+// Display unit, 'F' or 'C'. Readings arrive in °C and limits are configured in °F;
+// both are converted to °F once, then to the display unit only when shown.
+export const fromF = (f, unit) => (unit === 'C' ? ((f - 32) * 5) / 9 : f)
+const short = (f, unit) => String(Number(fromF(f, unit).toFixed(1)))
+export const degrees = (f, unit) => `${short(f, unit)} °${unit}`
+export const degreeRange = (a, b, unit) => `${short(a, unit)}–${short(b, unit)} °${unit}`
+
 // The API wants minutes east of UTC. getTimezoneOffset() is minutes WEST, so negate it.
 export const tzOffsetMinutes = (date = new Date()) => -date.getTimezoneOffset()
+
+// Water-temperature health. Thresholds come from the server: five ascending °F limits.
+export const HEALTH = {
+  'too-cold': { label: 'Too cold', tone: 'danger', icon: 'alert' },
+  'too-cool': { label: 'Caution: too cool', tone: 'caution', icon: 'down' },
+  overnight: { label: 'Acceptable overnight', tone: 'fair', icon: 'moon' },
+  optimal: { label: 'Optimal', tone: 'good', icon: 'check' },
+  warm: { label: 'Above optimal', tone: 'caution', icon: 'up' },
+  'too-warm': { label: 'Too warm', tone: 'danger', icon: 'alert' },
+}
+
+// Classified on the value as displayed (one decimal), so 73.96 shown as 74.0 reads Optimal.
+export function healthFor(tempF, [cold, cool, low, high, hot]) {
+  const t = Math.round(tempF * 10) / 10
+  if (t < cold) return 'too-cold'
+  if (t < cool) return 'too-cool'
+  if (t < low) return 'overnight'
+  if (t <= high) return 'optimal'
+  if (t <= hot) return 'warm'
+  return 'too-warm'
+}
+
+export function healthDetail(key, [cold, cool, low, high, hot], unit = 'F') {
+  const optimal = degreeRange(low, high, unit)
+  return {
+    'too-cold': `Below ${degrees(cold, unit)}. Check the heater.`,
+    'too-cool': `Below the ${degreeRange(cool, low, unit)} overnight range. Check the heater.`,
+    overnight: `Fine for brief overnight cooling. Should warm back to ${optimal} during the day.`,
+    optimal: `Within the ${optimal} optimal range.`,
+    warm: `Above the ${optimal} optimal range.`,
+    'too-warm': `Above ${degrees(hot, unit)}. Check for direct sun or an overheating heater.`,
+  }[key]
+}
+
+export function formatDuration(seconds) {
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 90) return `${minutes} minutes`
+  const hours = Math.round(minutes / 60)
+  return hours < 48 ? `${hours} hours` : `${Math.round(hours / 24)} days`
+}
+
+// One line for a sustained cooling warning from /api/status `excursion`.
+export function excursionText({ start, last_below, recovering }, thresholds, unit = 'F') {
+  const limit = degrees(thresholds[1], unit)
+  const span = last_below - start
+  if (recovering) {
+    return span > 0
+      ? `Recovering after about ${formatDuration(span)} below ${limit}.`
+      : `Recovering after a dip below ${limit}.`
+  }
+  return span > 0 ? `Below ${limit} for about ${formatDuration(span)}.` : `Below ${limit} at the latest reading.`
+}
 
 export async function fetchJson(url, signal) {
   const response = await fetch(url, { signal })

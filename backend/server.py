@@ -14,9 +14,53 @@ import db
 
 log = logging.getLogger("turtlewatch.server")
 TZ_PATTERN = re.compile(r"-?\d{1,3}")
+# Water-temperature health limits in °F, ascending: too cold below the first, caution
+# below the second, acceptable overnight below the third, optimal through the fourth,
+# above optimal through the fifth, too warm above it. Defaults for an adult red-eared slider.
+DEFAULT_THRESHOLDS_F = (68.0, 70.0, 74.0, 79.0, 82.0)
+EXCURSION_LOOKBACK = 7 * db.DAY
+CONFIRM_READINGS = 2  # consecutive readings to start a sustained warning, and to clear one
 
 
-def create_app(data_dir, static_dir, get_sensor_status, poll_interval=300):
+def excursion(rows, thresholds_f, max_gap):
+    """The current cooling excursion, or None.
+
+    Only the newest gap-free run of readings counts: a gap (missing readings, sensor
+    offline) ends any excursion, because nothing is known about the water meanwhile.
+    A warning starts after CONFIRM_READINGS consecutive readings below the second
+    threshold, or at once below the first, and clears after CONFIRM_READINGS
+    consecutive readings at or above the second threshold.
+    """
+    cold, cool = thresholds_f[0], thresholds_f[1]
+    first = len(rows) - 1
+    while first > 0 and rows[first][0] - rows[first - 1][0] <= max_gap:
+        first -= 1
+    started = low_since = last_low = None
+    lows = oks = 0
+    for ts, temp_c in rows[max(first, 0):]:
+        temp_f = round(temp_c * 9 / 5 + 32, 1)  # rated as displayed, like the dashboard
+        if temp_f < cool:
+            lows, oks, last_low = lows + 1, 0, ts
+            low_since = low_since or ts
+            if started is None and (lows >= CONFIRM_READINGS or temp_f < cold):
+                started = low_since
+        else:
+            lows, oks, low_since = 0, oks + 1, None
+            if started is not None and oks >= CONFIRM_READINGS:
+                started = None
+    if started is None:
+        return None
+    latest_f = round(rows[-1][1] * 9 / 5 + 32, 1)
+    return {
+        "start": started,
+        "last_below": last_low,
+        "level": "danger" if latest_f < cold else "caution",
+        "recovering": latest_f >= cool,
+    }
+
+
+def create_app(data_dir, static_dir, get_sensor_status, poll_interval=300,
+               thresholds_f=DEFAULT_THRESHOLDS_F):
     app = Flask(__name__, static_folder=None)
     paths = db.db_paths(data_dir)
     for path in paths.values():
@@ -33,15 +77,18 @@ def create_app(data_dir, static_dir, get_sensor_status, poll_interval=300):
     @app.get("/api/status")
     def status():
         mode = mode_arg()
-        reading = None
+        reading = cold_spell = None
         row = db.latest(paths[mode])
         if row:
+            rows = db.recent(paths[mode], row[0], EXCURSION_LOOKBACK)
+            cold_spell = excursion(rows, thresholds_f, raw_step * 1.5)
             ts, temp_c = row
             # Demo time ends at the last demo reading, so demo is never stale.
             age = 0 if mode == "demo" else max(0, int(time.time()) - ts)
             reading = {"ts": ts, "temp_c": round(temp_c, 2), "age": age,
                        "stale": age > stale_after}
-        return jsonify(mode=mode, reading=reading, sensor=get_sensor_status())
+        return jsonify(mode=mode, reading=reading, sensor=get_sensor_status(),
+                       thresholds_f=list(thresholds_f), excursion=cold_spell)
 
     @app.get("/api/history")
     def history():

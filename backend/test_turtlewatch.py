@@ -13,6 +13,7 @@ import tempfile
 import threading
 import time
 import unittest
+import unittest.mock
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -21,7 +22,7 @@ import db
 import demo
 import shelly
 from collector import Collector
-from server import create_app
+from server import create_app, excursion
 
 BACKEND = Path(__file__).resolve().parent
 T0 = 1_750_000_000 // db.DAY * db.DAY  # a UTC midnight
@@ -340,16 +341,18 @@ class DemoTests(TempDirCase):
         added = demo.seed(self.paths["demo"], 30, now=T0)
         first = self.rows()
         self.assertEqual(added, len(first))
-        self.assertEqual(demo.seed(self.paths["demo"], 30, now=T0), 0)  # no duplicates
+        self.assertEqual(demo.seed(self.paths["demo"], 30, now=T0), len(first))  # replaced, not duplicated
         self.assertEqual(self.rows(), first)
         other = self.dir / "other.db"
         demo.seed(other, 30, now=T0)
         with db.connect(other, readonly=True) as conn:
             self.assertEqual(conn.execute("SELECT ts, temp_c FROM readings ORDER BY ts").fetchall(),
                              first)
-        # A later, longer seed tops up around the same values.
+        # A later seed regenerates its window; history before the calm final days is unchanged.
         demo.seed(self.paths["demo"], 40, now=T0 + db.DAY)
-        self.assertTrue(set(first) <= set(self.rows()))
+        settled = {r for r in first if r[0] < T0 - demo.QUIET - demo.TAIL}
+        self.assertTrue(settled <= set(self.rows()))
+        self.assertEqual(len({ts for ts, _ in self.rows()}), len(self.rows()))
 
     def test_shape_of_generated_data(self):
         demo.seed(self.paths["demo"], 365, now=T0)
@@ -361,8 +364,24 @@ class DemoTests(TempDirCase):
         self.assertGreater(sum(1 for g in gaps if g > 300), 20)       # dropped readings
         self.assertGreater(max(gaps), db.DAY)                          # a long outage
         self.assertGreater(len(rows), 365 * 288 * 0.9)
-        temps = [t for _, t in rows]
-        self.assertGreater(max(temps) - min(temps), 10)                # seasons are visible
+        temps_f = [t * 9 / 5 + 32 for _, t in rows]
+        optimal = sum(1 for f in temps_f if 74 <= f <= 79) / len(temps_f)
+        self.assertGreater(optimal, 0.7)                               # mostly a healthy tank
+        self.assertTrue(any(f > 82 for f in temps_f))                  # heat waves
+        self.assertTrue(all(55 < f < 95 for f in temps_f))
+        # A broken heater keeps the water below 70 °F for more than a day at a time.
+        longest = run = 0
+        for (a, fa), (b, fb) in zip(zip([r[0] for r in rows], temps_f), zip([r[0] for r in rows[1:]], temps_f[1:])):
+            run = run + (b - a) if fa < 70 and fb < 70 and b - a <= 450 else 0
+            longest = max(longest, run)
+        self.assertGreater(longest, db.DAY)
+        # Episodes recur all year: every 30-day block has one or two.
+        for block in range(T0 // db.DAY // 30 - 11, T0 // db.DAY // 30):
+            self.assertIn(len(demo._block_episodes(block)), (1, 2))
+        # The newest two days are calm, so Demo opens on a healthy reading.
+        recent = [f for (ts, _), f in zip(rows, temps_f) if ts > T0 - demo.QUIET]
+        self.assertTrue(all(70 <= f <= 82 for f in recent))
+        self.assertTrue(74 <= temps_f[-1] <= 79)
 
     def test_seed_and_clear_never_touch_production(self):
         self.insert([(T0, 20.0), (T0 + 300, 20.5)])
@@ -475,6 +494,75 @@ class ApiTests(TempDirCase):
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM readings").fetchone()[0], 0)
             with self.assertRaises(sqlite3.OperationalError):
                 conn.execute("INSERT INTO readings VALUES (1, 20.0)")
+
+
+def f_to_c(f):
+    return (f - 32) * 5 / 9
+
+
+class ExcursionTests(TempDirCase):
+    LIMITS = (68, 70, 74, 79, 82)
+
+    def run_of(self, temps_f, start=T0, step=300):
+        return [(start + i * step, f_to_c(f)) for i, f in enumerate(temps_f)]
+
+    def check(self, temps_f, expected, limits=LIMITS):
+        result = excursion(self.run_of(temps_f), limits, 450)
+        self.assertEqual(result and (result["start"], result["level"], result["recovering"]),
+                         expected, temps_f)
+        return result
+
+    def test_rules(self):
+        self.check([], None)
+        self.check([75, 69], None)                                   # one low reading: wait
+        self.check([75, 69, 69.5], (T0 + 300, "caution", False))     # two in a row: warn
+        self.check([75, 67.5], (T0 + 300, "danger", False))          # below 68: at once
+        self.check([69, 69, 67], (T0, "danger", False))
+        self.check([69, 69, 67, 69], (T0, "caution", False))         # back above 68
+        self.check([69, 69, 71], (T0, "caution", True))              # one good reading: recovering
+        self.check([69, 69, 71, 72], None)                           # two good readings: cleared
+        self.check([69, 69, 71, 69], (T0, "caution", False))         # relapse keeps the start
+        self.check([69, 69, 71, 72, 69], None)                       # new dip needs two again
+        self.check([69.96, 69.96], None)                             # 70.0 as displayed
+        self.check([72, 72], (T0, "caution", False), limits=(60, 73, 74, 79, 82))
+
+    def test_duration_and_gaps(self):
+        result = self.check([75] + [69] * 6, (T0 + 300, "caution", False))
+        self.assertEqual(result["last_below"] - result["start"], 25 * 60)   # "about 25 minutes"
+        # A gap (sensor offline) ends the excursion: the readings after it start afresh.
+        rows = self.run_of([69] * 6) + self.run_of([69], start=T0 + 6 * 300 + 3600)
+        self.assertIsNone(excursion(rows, self.LIMITS, 450))
+        rows.append((rows[-1][0] + 300, f_to_c(69)))
+        self.assertEqual(excursion(rows, self.LIMITS, 450)["start"], T0 + 6 * 300 + 3600)
+
+    def test_api_reports_each_modes_own_excursion(self):
+        self.insert(self.run_of([69, 69], start=T0), "demo")
+        now = int(time.time()) // 300 * 300
+        self.insert(self.run_of([76, 76], start=now - 300), "real")
+        client = create_app(self.dir, self.dir, lambda: {}).test_client()
+        self.assertEqual(client.get("/api/status?mode=demo").json["excursion"],
+                         {"start": T0, "last_below": T0 + 300, "level": "caution", "recovering": False})
+        self.assertIsNone(client.get("/api/status?mode=real").json["excursion"])
+
+
+class ThresholdTests(TempDirCase):
+    def test_status_carries_thresholds(self):
+        app = create_app(self.dir, self.dir, lambda: {}, thresholds_f=(60, 65, 70, 75, 80))
+        self.assertEqual(app.test_client().get("/api/status?mode=demo").json["thresholds_f"],
+                         [60, 65, 70, 75, 80])
+        default = create_app(self.dir, self.dir, lambda: {}).test_client()
+        self.assertEqual(default.get("/api/status").json["thresholds_f"], [68, 70, 74, 79, 82])
+
+    def test_env_parsing(self):
+        import main
+        cases = {"": (68.0, 70.0, 74.0, 79.0, 82.0), " 66, 69.5,73,80,84 ": (66, 69.5, 73, 80, 84)}
+        for raw, expected in cases.items():
+            with unittest.mock.patch.dict(os.environ, {"TEMP_THRESHOLDS_F": raw}):
+                self.assertEqual(main.env_thresholds(), expected)
+        for raw in ("68,70,74,79", "68,70,74,79,82,90", "70,68,74,79,82", "68,68,74,79,82", "a,b,c,d,e"):
+            with unittest.mock.patch.dict(os.environ, {"TEMP_THRESHOLDS_F": raw}):
+                with self.assertRaises(SystemExit, msg=raw):
+                    main.env_thresholds()
 
 
 class ProcessTests(unittest.TestCase):

@@ -13,6 +13,7 @@ services:
       SHELLY_TEMPERATURE_ID: ${SHELLY_TEMPERATURE_ID:-}
       POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-300}
       TZ: ${TZ:-UTC}
+      TEMP_THRESHOLDS_F: ${TEMP_THRESHOLDS_F:-}
     volumes:
       - ./data:/app/data
     # Nothing but ./data can be written, so data can never land in the container layer.

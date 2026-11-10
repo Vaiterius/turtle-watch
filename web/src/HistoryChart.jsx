@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import {
   Chart, Filler, LinearScale, LineController, LineElement, PointElement, Tooltip,
 } from 'chart.js'
-import { buildTicks, formatPointTime, formatTick, isolatedFlags, toF } from './util.js'
+import { HEALTH, buildTicks, formatPointTime, formatTick, fromF, healthFor, isolatedFlags, toF } from './util.js'
 
 Chart.register(LineController, LineElement, PointElement, LinearScale, Filler, Tooltip)
 
@@ -32,8 +32,23 @@ const crosshair = {
   },
 }
 
+// Shades the optimal temperature range behind the data. Options: { low, high, color }.
+const optimalBand = {
+  id: 'optimalBand',
+  beforeDatasetsDraw(chart, args, { low, high, color }) {
+    const { ctx, chartArea, scales: { y } } = chart
+    const top = Math.max(chartArea.top, y.getPixelForValue(high))
+    const bottom = Math.min(chartArea.bottom, y.getPixelForValue(low))
+    if (bottom <= top) return
+    ctx.save()
+    ctx.fillStyle = color
+    ctx.fillRect(chartArea.left, top, chartArea.right - chartArea.left, bottom - top)
+    ctx.restore()
+  },
+}
+
 // `mode` is a dependency only so the colours are re-read when the accent changes.
-export default function HistoryChart({ history, mode }) {
+export default function HistoryChart({ history, mode, thresholds, tempUnit }) {
   const canvas = useRef(null)
 
   useEffect(() => {
@@ -43,10 +58,15 @@ export default function HistoryChart({ history, mode }) {
     const aggregated = bucket > 0
     const maxGap = step * 1.5
     const isolated = isolatedFlags(points.map((p) => p[0]), maxGap)
+    const show = (celsius) => fromF(toF(celsius), tempUnit)
+    // y is in the display unit; f stays in °F for the health rating.
     const series = (column) =>
-      points.map((p) => ({ x: p[0], y: toF(p[column]), lo: toF(p[2]), hi: toF(p[3]), n: p[4] }))
+      points.map((p) => ({ x: p[0], y: show(p[column]), f: toF(p[column]), lo: show(p[2]), hi: show(p[3]), n: p[4] }))
     const hidden = { borderWidth: 0, pointRadius: 0, pointHoverRadius: 0, spanGaps: maxGap }
     const { unit, ticks } = buildTicks(start, end)
+    const [low, high] = [fromF(thresholds[2], tempUnit), fromF(thresholds[3], tempUnit)]
+    // Same tokens as the dashboard's health badge: good, fair, caution, danger.
+    const healthColor = (item) => token(HEALTH[healthFor(item.raw.f, thresholds)].tone)
 
     const chart = new Chart(canvas.current, {
       type: 'line',
@@ -100,15 +120,23 @@ export default function HistoryChart({ history, mode }) {
           },
           y: {
             grace: '12%',
+            // Always show the optimal band, so every range reads against the same reference.
+            suggestedMin: low - 1,
+            suggestedMax: high + 1,
             ticks: { color: muted, maxTicksLimit: 6, callback: (value) => `${Math.round(value * 10) / 10}°` },
             grid: { color: withAlpha(token('line'), 0.6) },
             border: { display: false },
           },
         },
         plugins: {
+          optimalBand: { low, high, color: withAlpha(token('good'), 0.09) },
           tooltip: {
             filter: (item) => item.datasetIndex === 0,
-            displayColors: false,
+            // The swatch and the status line share the health colour, so it is never colour alone.
+            displayColors: true,
+            boxWidth: 8,
+            boxHeight: 8,
+            boxPadding: 4,
             backgroundColor: token('bg'),
             borderColor: token('line'),
             borderWidth: 1,
@@ -121,20 +149,28 @@ export default function HistoryChart({ history, mode }) {
             padding: 10,
             callbacks: {
               title: (items) => (items.length ? formatPointTime(items[0].raw.x, bucket) : ''),
-              label: (item) => `${item.raw.y.toFixed(1)} °F${aggregated ? ' average' : ''}`,
+              beforeBody: (items) =>
+                items.length ? `${items[0].raw.y.toFixed(1)} °${tempUnit}${aggregated ? ' average' : ''}` : '',
+              label: (item) => HEALTH[healthFor(item.raw.f, thresholds)].label,
+              labelTextColor: (item) => healthColor(item),
+              labelColor: (item) => {
+                const color = healthColor(item)
+                return { borderColor: color, backgroundColor: color, borderWidth: 0, borderRadius: 2 }
+              },
               footer: (items) => {
                 if (!aggregated || !items.length) return ''
                 const { lo, hi, n } = items[0].raw
-                return `${lo.toFixed(1)} to ${hi.toFixed(1)} °F · ${n} reading${n === 1 ? '' : 's'}`
+                return `${lo.toFixed(1)} to ${hi.toFixed(1)} °${tempUnit} · ${n} reading${n === 1 ? '' : 's'}`
               },
             },
           },
         },
       },
-      plugins: [crosshair],
+      plugins: [optimalBand, crosshair],
     })
     return () => chart.destroy()
-  }, [history, mode])
+    // Compared by value: each 30 s status refresh delivers a new but identical array.
+  }, [history, mode, thresholds.join(), tempUnit])
 
   return (
     <div className="relative h-64 sm:h-80">

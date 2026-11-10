@@ -54,7 +54,7 @@ docker compose exec turtlewatch python main.py seed --status
 docker compose exec turtlewatch python main.py seed --clear
 ```
 
-Seeding is repeatable: running it again adds only what is missing up to now.
+The demo is a heated tank around 76–77 °F with one or two multi-day episodes a month: heat waves, storms or cold spells, a broken heater (cold for days until a replacement), and now and then a broken sensor (no readings for days). Seeding is repeatable: running it again regenerates the chosen window up to now, with the same episodes on the same dates, and the newest two days are always calm.
 
 Set `TZ` in `.env` before you seed. The simulated daily cycle peaks in the late afternoon of that time zone; if you change `TZ` later, clear the demo data and seed again.
 
@@ -127,7 +127,27 @@ Set in `.env` (see `.env.example`).
 | `POLL_INTERVAL_SECONDS` | `300` | Seconds between readings. |
 | `PORT` | `8000` | Port on the Pi. |
 | `TZ` | `UTC` | Time zone for logs and the demo data's daily cycle. |
+| `TEMP_THRESHOLDS_F` | `68,70,74,79,82` | Health limits in °F; see below. |
 | `PUID`, `PGID` | `1000` | Owner of `./data` on the Pi. |
+
+## Temperature health
+
+The dashboard rates the current reading against five limits, the same in Real and Demo, day and night:
+
+| Water | Status |
+|---|---|
+| 74–79 °F | Optimal |
+| 70–73.9 °F | Acceptable overnight: fine for brief cooling, not as a sustained temperature |
+| 68–69.9 °F | Caution: too cool |
+| below 68 °F | Too cold |
+| 79.1–82 °F | Above optimal |
+| above 82 °F | Too warm |
+
+These are conservative defaults for routine care of an adult red-eared slider, not medical limits. Change them with `TEMP_THRESHOLDS_F` in `.env`, then `docker compose up -d`. The graph shades the optimal band. Health is separate from connection status: if the reading is stale or the sensor is failing, the rating says it describes the last reading.
+
+**Sustained cooling.** After two consecutive readings below 70 °F (the second limit) the rating gets a yellow panel and a line such as "Below 70 °F for about 25 minutes". A reading below 68 °F (the first limit) turns it red at once. It clears after two consecutive readings at or above 70 °F, so one warm reading doesn't make it flicker. A gap in readings (sensor offline, dropped readings) ends the excursion: nothing is assumed about the water while no readings arrive, and the count starts again from the next reading. The same rules apply to Real and Demo, each from its own database.
+
+**Units.** The °F/°C switch in the header changes only the display, and the browser remembers it. Readings are stored in °C and the limits are set in °F.
 
 ## Development
 

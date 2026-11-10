@@ -1,6 +1,33 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { DAY, buildTicks, formatAge, isolatedFlags, toF, tzOffsetMinutes } from './util.js'
+import {
+  DAY, buildTicks, degreeRange, degrees, excursionText, formatAge, healthDetail, healthFor, isolatedFlags, toF,
+  tzOffsetMinutes,
+} from './util.js'
+
+test('units: limits and readings convert only for display', () => {
+  assert.equal(degrees(70, 'F'), '70 °F')
+  assert.equal(degrees(70, 'C'), '21.1 °C')
+  assert.equal(degreeRange(74, 79, 'C'), '23.3–26.1 °C')
+  assert.equal(healthDetail('optimal', [68, 70, 74, 79, 82], 'C'), 'Within the 23.3–26.1 °C optimal range.')
+})
+
+test('sustained cooling wording', () => {
+  const t = [68, 70, 74, 79, 82]
+  assert.equal(excursionText({ start: 0, last_below: 1500, recovering: false }, t), 'Below 70 °F for about 25 minutes.')
+  assert.equal(excursionText({ start: 0, last_below: 0, recovering: false }, t), 'Below 70 °F at the latest reading.')
+  assert.equal(excursionText({ start: 0, last_below: 3 * 3600, recovering: true }, t, 'C'),
+    'Recovering after about 3 hours below 21.1 °C.')
+})
+
+test('health bands follow the table, edges included', () => {
+  const t = [68, 70, 74, 79, 82]
+  const cases = [[50, 'too-cold'], [67.9, 'too-cold'], [68, 'too-cool'], [69.9, 'too-cool'],
+    [70, 'overnight'], [73.9, 'overnight'], [73.96, 'optimal'], [74, 'optimal'], [79, 'optimal'],
+    [79.1, 'warm'], [82, 'warm'], [82.1, 'too-warm'], [95, 'too-warm']]
+  for (const [f, key] of cases) assert.equal(healthFor(f, t), key, `${f} °F`)
+  assert.equal(healthFor(72, [60, 65, 70, 75, 80]), 'optimal')
+})
 
 test('Celsius to Fahrenheit', () => {
   assert.equal(toF(0), 32)

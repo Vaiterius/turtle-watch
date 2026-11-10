@@ -13,6 +13,10 @@
   --color-ok: #4fb8dc;
   --color-warn: #e6b450;
   --color-danger: #f0736e;
+  /* Water-temperature health. Kept apart from the connection colours above. */
+  --color-good: #5ccf86;
+  --color-fair: #b2d45c;
+  --color-caution: #ead85a;
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, sans-serif;
 }

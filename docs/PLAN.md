@@ -332,6 +332,27 @@ A single centred column about 880 px wide, the same on desktop and mobile:
 
 Offline is checked before No data, so a sensor that fails on its first day shows the failure and its reason, not a wait message. A stale reading is dimmed and labelled as not current.
 
+### Temperature health
+
+Added after the build at the user's request. The latest reading is rated against five ascending °F limits from `TEMP_THRESHOLDS_F` (default `68,70,74,79,82`, for an adult red-eared slider). The server validates them and returns them as `thresholds_f` in `/api/status`.
+
+| Water | Status | Colour |
+|---|---|---|
+| 74–79 °F | Optimal | green |
+| 70–73.9 °F | Acceptable overnight | yellow-green |
+| 68–69.9 °F | Caution: too cool | yellow |
+| below 68 °F | Too cold | red, shown as a tinted panel |
+| 79.1–82 °F | Above optimal | yellow |
+| above 82 °F | Too warm | red, shown as a tinted panel |
+
+- The same limits apply in Real and Demo, day and night, and never change with the season.
+- The reading is classified as displayed, rounded to 0.1 °F.
+- Health is separate from connection status. When the reading is stale or the sensor is failing, the health badge says "at the last reading".
+- The graph shades the optimal band, and the y-axis always includes it.
+- **Sustained cooling.** `/api/status` adds `excursion`: `null`, or `{start, last_below, level, recovering}`. It is computed from the newest gap-free run of readings in the last 7 days of that mode's database, by `server.excursion()`. It starts after 2 consecutive readings below the second limit, or at once below the first, and clears after 2 consecutive readings at or above the second. A gap longer than 1.5 poll intervals ends it. No new tables.
+- **Units.** A °F/°C display switch, stored in `localStorage`. Storage stays °C and the limits stay °F.
+- **Demo data.** The generator simulates a heated tank averaging about 76.5 °F. Each 30-day block gets 1–2 multi-day episodes from a fixed rotation: heat wave, storm or cold spell, broken heater, broken sensor. Seeding regenerates its window (delete, then insert) and keeps the final two days calm, so Demo opens on a healthy reading.
+
 ### Tailwind
 
 - **Setup.** `tailwindcss` and `@tailwindcss/vite`, the plugin added in `vite.config.js`, and `@import "tailwindcss";` in `web/src/index.css`. The documented Vite setup needs no `tailwind.config.js` and no PostCSS config.

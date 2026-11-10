@@ -63,6 +63,15 @@ def latest(path):
         ).fetchone()
 
 
+def recent(path, end, span):
+    """[(ts, temp_c)] oldest first, for the `span` seconds up to and including `end`."""
+    with connect(path, readonly=True) as conn:
+        return conn.execute(
+            "SELECT ts, temp_c FROM readings WHERE ts > ? AND ts <= ? ORDER BY ts",
+            (end - span, end),
+        ).fetchall()
+
+
 def history(path, range_key, tz_minutes, end, raw_step):
     """Aggregated points and raw-row statistics for one window ending at `end`.
 

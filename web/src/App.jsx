@@ -1,17 +1,30 @@
 import { useEffect, useState } from 'react'
 import HistoryChart from './HistoryChart.jsx'
-import { fetchJson, formatAge, formatDateTime, formatTime, toF, tzOffsetMinutes } from './util.js'
+import {
+  HEALTH, degreeRange, excursionText, fetchJson, formatAge, formatDateTime, formatTime, fromF, healthDetail, healthFor,
+  toF, tzOffsetMinutes,
+} from './util.js'
 
 const REFRESH_MS = 30_000
 const MODE_KEY = 'turtlewatch.mode'
+const UNIT_KEY = 'turtlewatch.unit'
 const RANGES = [['24h', '24H'], ['7d', '7D'], ['30d', '30D'], ['1y', '1Y'], ['all', 'All']]
 const SEED_COMMAND = 'docker compose exec turtlewatch python main.py seed --days 30'
 
-const savedMode = () => {
+// Browser storage can be unavailable (private browsing); the choice then just isn't remembered.
+const loadSetting = (key, allowed, fallback) => {
   try {
-    return localStorage.getItem(MODE_KEY) === 'demo' ? 'demo' : 'real'
+    const value = localStorage.getItem(key)
+    return allowed.includes(value) ? value : fallback
   } catch {
-    return 'real'
+    return fallback
+  }
+}
+const saveSetting = (key, value) => {
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    // not remembered
   }
 }
 
@@ -22,6 +35,62 @@ const PILL = {
   Stale: 'text-warn',
   Offline: 'text-danger',
   'No data': 'text-muted',
+}
+
+const TONE_TEXT = {
+  good: 'text-good',
+  fair: 'text-fair',
+  caution: 'text-caution',
+  danger: 'text-danger',
+}
+
+const ICONS = {
+  check: <><circle cx="12" cy="12" r="9" /><path d="m8 12.5 2.5 2.5L16 9.5" /></>,
+  moon: <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" />,
+  down: <path d="M12 5v14M6 13l6 6 6-6" />,
+  up: <path d="M12 19V5M6 11l6-6 6 6" />,
+  alert: <><path d="M12 3.5 2.5 20h19L12 3.5Z" /><path d="M12 10v4.5M12 17.5v.01" /></>,
+}
+
+function Icon({ name, className }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+      strokeLinejoin="round" className={className} aria-hidden="true">
+      {ICONS[name]}
+    </svg>
+  )
+}
+
+const PANEL = {
+  danger: 'mt-5 flex max-w-xl items-start gap-3 rounded-lg border border-danger/50 bg-danger/10 px-3.5 py-3',
+  caution: 'mt-5 flex max-w-xl items-start gap-3 rounded-lg border border-caution/35 bg-caution/5 px-3.5 py-3',
+  none: 'mt-5 flex max-w-xl items-start gap-3',
+}
+
+// Temperature health, shown apart from the connection pill. `current` is false when the
+// reading is stale or the sensor is failing, so the badge says which reading it describes.
+// `excursion` is the server's sustained-cooling state; it adds a panel and a duration line.
+function HealthBadge({ tempF, thresholds, current, excursion, unit }) {
+  const key = healthFor(tempF, thresholds)
+  const { label, tone, icon } = HEALTH[key]
+  const panel = excursion?.level ?? (tone === 'danger' ? 'danger' : 'none')
+  return (
+    <div role={panel === 'danger' ? 'alert' : 'status'} className={PANEL[panel]}>
+      <Icon name={icon} className={`mt-px h-5 w-5 shrink-0 ${TONE_TEXT[tone]}`} />
+      <div className="text-sm">
+        <div className={`font-semibold ${TONE_TEXT[tone]}`}>
+          {label}
+          {!current && <span className="font-normal text-muted"> · at the last reading</span>}
+        </div>
+        <div className="mt-0.5 text-muted">{healthDetail(key, thresholds, unit)}</div>
+        {excursion && (
+          <div className={`mt-1.5 font-medium ${excursion.level === 'danger' ? 'text-danger' : 'text-caution'}`}>
+            Sustained cooling · {excursionText(excursion, thresholds, unit)}
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 function pillFor(mode, status) {
@@ -62,7 +131,7 @@ function Segmented({ options, value, onChange, label }) {
   )
 }
 
-function Hero({ mode, status }) {
+function Hero({ mode, status, unit }) {
   if (!status) {
     return (
       <section className="py-10" aria-busy="true">
@@ -84,9 +153,9 @@ function Hero({ mode, status }) {
       </div>
       <div className={`mt-2 flex items-start tabular-nums ${notCurrent ? 'text-muted' : 'text-text'}`}>
         <span className="text-7xl font-light tracking-tight sm:text-8xl">
-          {reading ? toF(reading.temp_c).toFixed(1) : '––.–'}
+          {reading ? fromF(toF(reading.temp_c), unit).toFixed(1) : '––.–'}
         </span>
-        <span className="mt-2 ml-1 text-2xl text-muted sm:text-3xl">°F</span>
+        <span className="mt-2 ml-1 text-2xl text-muted sm:text-3xl">°{unit}</span>
       </div>
       {reading && mode === 'real' && (
         <p className="mt-3 text-sm text-muted">
@@ -99,6 +168,15 @@ function Hero({ mode, status }) {
       )}
       {reading && mode === 'demo' && (
         <p className="mt-3 text-sm text-muted">Simulated reading · {formatDateTime(reading.ts)}</p>
+      )}
+      {reading && (
+        <HealthBadge
+          tempF={toF(reading.temp_c)}
+          thresholds={status.thresholds_f}
+          current={mode === 'demo' || (!reading.stale && sensor.state !== 'error')}
+          excursion={status.excursion}
+          unit={unit}
+        />
       )}
       {empty && (
         <p className="mt-3 text-sm text-muted">
@@ -114,13 +192,13 @@ function Hero({ mode, status }) {
   )
 }
 
-function Stat({ label, celsius }) {
+function Stat({ label, celsius, unit }) {
   return (
     <div className="px-4 py-3 first:pl-0">
       <div className="text-xs tracking-wide text-muted uppercase">{label}</div>
       <div className="mt-1 text-xl tabular-nums">
-        {celsius == null ? '–' : toF(celsius).toFixed(1)}
-        <span className="ml-0.5 text-sm text-muted">°F</span>
+        {celsius == null ? '–' : fromF(toF(celsius), unit).toFixed(1)}
+        <span className="ml-0.5 text-sm text-muted">°{unit}</span>
       </div>
     </div>
   )
@@ -162,7 +240,8 @@ function SystemStatus({ mode, status }) {
 }
 
 export default function App() {
-  const [mode, setMode] = useState(savedMode)
+  const [mode, setMode] = useState(() => loadSetting(MODE_KEY, ['real', 'demo'], 'real'))
+  const [unit, setUnit] = useState(() => loadSetting(UNIT_KEY, ['F', 'C'], 'F'))
   const [range, setRange] = useState('24h')
   const [status, setStatus] = useState(null)
   const [history, setHistory] = useState(null)
@@ -170,12 +249,9 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.dataset.mode = mode
-    try {
-      localStorage.setItem(MODE_KEY, mode)
-    } catch {
-      // private browsing: the choice just isn't remembered
-    }
+    saveSetting(MODE_KEY, mode)
   }, [mode])
+  useEffect(() => saveSetting(UNIT_KEY, unit), [unit])
 
   // Status every 30 s, paused while the tab is hidden. This never polls the Shelly.
   useEffect(() => {
@@ -226,11 +302,14 @@ export default function App() {
 
   return (
     <main className="mx-auto max-w-4xl px-4 pt-5 pb-12 sm:px-6">
-      <header className="flex items-center justify-between gap-4">
+      <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-base font-semibold tracking-tight">
           <span className="text-accent">●</span> Turtlewatch
         </h1>
-        <Segmented label="Data source" options={[['real', 'Real'], ['demo', 'Demo']]} value={mode} onChange={setMode} />
+        <div className="flex gap-2">
+          <Segmented label="Temperature unit" options={[['F', '°F'], ['C', '°C']]} value={unit} onChange={setUnit} />
+          <Segmented label="Data source" options={[['real', 'Real'], ['demo', 'Demo']]} value={mode} onChange={setMode} />
+        </div>
       </header>
 
       {mode === 'demo' && (
@@ -245,12 +324,18 @@ export default function App() {
       )}
 
       <div className={unreachable ? 'opacity-60' : ''}>
-        <Hero mode={mode} status={status} />
+        <Hero mode={mode} status={status} unit={unit} />
 
         <section className="rounded-xl border border-line bg-surface p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-sm text-muted">
               Water temperature{current?.bucket > 0 && ' · average with min to max band'}
+              {status && (
+                <span className="mt-1 flex items-center gap-1.5 text-xs">
+                  <span className="inline-block h-2.5 w-4 rounded-sm border border-good/40 bg-good/15" aria-hidden="true" />
+                  Optimal {degreeRange(status.thresholds_f[2], status.thresholds_f[3], unit)}
+                </span>
+              )}
             </h2>
             <Segmented label="Time range" options={RANGES} value={range} onChange={setRange} />
           </div>
@@ -262,13 +347,13 @@ export default function App() {
                 No readings in this range.
               </div>
             ) : (
-              <HistoryChart history={current} mode={mode} />
+              <HistoryChart history={current} mode={mode} thresholds={status.thresholds_f} tempUnit={unit} />
             )}
           </div>
           <div className={`mt-3 grid grid-cols-3 divide-x divide-line border-t border-line pt-1 transition-opacity ${switching ? 'opacity-60' : ''}`}>
-            <Stat label="Min" celsius={stats?.min_c} />
-            <Stat label="Avg" celsius={stats?.avg_c} />
-            <Stat label="Max" celsius={stats?.max_c} />
+            <Stat label="Min" celsius={stats?.min_c} unit={unit} />
+            <Stat label="Avg" celsius={stats?.avg_c} unit={unit} />
+            <Stat label="Max" celsius={stats?.max_c} unit={unit} />
           </div>
           {stats && (
             <p className="mt-1 text-xs text-muted">

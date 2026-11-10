@@ -29,6 +29,22 @@ def env_int(name, default, minimum):
     return value
 
 
+def env_thresholds():
+    """TEMP_THRESHOLDS_F: five ascending °F values, e.g. 68,70,74,79,82."""
+    from server import DEFAULT_THRESHOLDS_F
+    raw = os.environ.get("TEMP_THRESHOLDS_F", "").strip()
+    if not raw:
+        return DEFAULT_THRESHOLDS_F
+    try:
+        values = tuple(float(v) for v in raw.split(","))
+    except ValueError:
+        values = ()
+    if len(values) != 5 or any(b <= a for a, b in zip(values, values[1:])):
+        sys.exit(f"TEMP_THRESHOLDS_F must be five ascending numbers in °F "
+                 f"(for example 68,70,74,79,82), got {raw!r}")
+    return values
+
+
 def data_dir():
     return Path(os.environ.get("DATA_DIR", "data")).resolve()
 
@@ -67,17 +83,19 @@ def serve():
     interval = env_int("POLL_INTERVAL_SECONDS", 300, 10)
     component_id = env_int("SHELLY_TEMPERATURE_ID", None, 0)
     port = env_int("PORT", 8000, 1)
+    thresholds = env_thresholds()
     static_dir = next((d for d in (HERE / "static", HERE.parent / "web" / "dist") if d.is_dir()),
                       HERE / "static")
 
     paths = db.db_paths(data)
     collector = Collector(paths["real"], data / "backups", host, component_id, interval)
-    app = create_app(data, static_dir, lambda: collector.status, interval)
+    app = create_app(data, static_dir, lambda: collector.status, interval, thresholds)
 
     signal.signal(signal.SIGTERM, interrupt)
     signal.signal(signal.SIGINT, interrupt)
-    log.info("Turtlewatch starting: port %d, sensor %s, poll every %d s, data %s",
-             port, host or "not configured", interval, data)
+    log.info("Turtlewatch starting: port %d, sensor %s, poll every %d s, data %s, "
+             "thresholds %s °F", port, host or "not configured", interval, data,
+             ",".join(f"{t:g}" for t in thresholds))
     thread = start_guarded(collector.run)
     try:
         waitress.serve(app, host="0.0.0.0", port=port, threads=4)
