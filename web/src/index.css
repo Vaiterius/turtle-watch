@@ -4,13 +4,13 @@
    because the chart reads them from JavaScript. */
 @theme static {
   --color-*: initial;
-  --color-bg: #0a1013;
-  --color-surface: #111a1f;
-  --color-line: #22303a;
-  --color-text: #e7eef1;
-  --color-muted: #8c9ca6;
-  --color-accent: #4fc9a4;
-  --color-ok: #4fc9a4;
+  --color-bg: #05080d;
+  --color-surface: #0a0f17;
+  --color-line: #1a2331;
+  --color-text: #e2e9f3;
+  --color-muted: #7c8899;
+  --color-accent: #4fb8dc;
+  --color-ok: #4fb8dc;
   --color-warn: #e6b450;
   --color-danger: #f0736e;
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",

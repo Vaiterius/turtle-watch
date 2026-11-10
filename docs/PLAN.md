@@ -349,7 +349,7 @@ In Demo mode the root element carries `data-mode="demo"`, and one CSS rule under
 
 ### Colour and motion
 
-Near-black blue-green surfaces, one teal accent, amber for stale and demo, red for offline. Chart animations are off. The only transitions are short colour fades.
+Near-black blue surfaces, one cool cyan-blue accent, amber for stale and demo, red for offline. Chart animations are off. The only transitions are short colour fades.
 
 ### Chart
 

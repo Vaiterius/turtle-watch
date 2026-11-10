@@ -219,7 +219,9 @@ export default function App() {
     return () => controller.abort()
   }, [mode, range, loaded, latestTs])
 
-  const current = history?.mode === mode && history.range === range ? history : null
+  // Keep the previous range on screen until the new one arrives, so switching ranges never blanks the chart.
+  const current = history?.mode === mode ? history : null
+  const switching = current && current.range !== range
   const stats = current?.stats
 
   return (
@@ -252,7 +254,7 @@ export default function App() {
             </h2>
             <Segmented label="Time range" options={RANGES} value={range} onChange={setRange} />
           </div>
-          <div className="mt-4">
+          <div className={`mt-4 transition-opacity ${switching ? 'opacity-60' : ''}`} aria-busy={switching || undefined}>
             {!current ? (
               <div className="flex h-64 items-center justify-center text-sm text-muted sm:h-80">Loading…</div>
             ) : current.points.length === 0 ? (
@@ -263,7 +265,7 @@ export default function App() {
               <HistoryChart history={current} mode={mode} />
             )}
           </div>
-          <div className="mt-3 grid grid-cols-3 divide-x divide-line border-t border-line pt-1">
+          <div className={`mt-3 grid grid-cols-3 divide-x divide-line border-t border-line pt-1 transition-opacity ${switching ? 'opacity-60' : ''}`}>
             <Stat label="Min" celsius={stats?.min_c} />
             <Stat label="Avg" celsius={stats?.avg_c} />
             <Stat label="Max" celsius={stats?.max_c} />
