@@ -312,13 +312,14 @@ GET /api/history?mode=real|demo&range=24h|7d|30d|1y|all&tz=<minutes>
 
 ### Layout
 
-A single centred column about 880 px wide, the same on desktop and mobile:
+The visual direction is "Instrument", chosen by the user on 2026-11-10: square edges, condensed numerals, and colour used only where it carries meaning. The layout is landscape, also chosen by the user on 2026-11-10, so the whole dashboard fits one screen without scrolling: verified at 1440×900 and 1440×780, including the tallest state (sustained cooling). The page is up to about 1520 px wide.
 
-- **Header:** wordmark and the Real/Demo toggle.
-- **Hero:** a large Fahrenheit reading with tabular numerals, a status pill, and the time of the last reading.
-- **Chart:** 24H, 7D, 30D, 1Y and All tabs, with the graph below.
-- **Statistics:** Min, Avg and Max for the selected range.
-- **Status footer:** whether the sensor is reachable and why not, the last successful reading, and the last poll attempt.
+- **Header**, full width: the wordmark "🐢 turtlewatch" (the emoji character itself, lowercase name, the emoji lifted so the turtle centres on the word), the °F/°C switch and the light/dark switch.
+- **Left column**, 320–440 px: the connection status, a large reading with tabular numerals sized to the window height, the time of the last reading, the health rating, and the health scale drawn from `thresholds_f` with a marker at the reading.
+- **Right column**: the chart, with 24H, 7D, 30D, 1Y and All tabs, filling the remaining height.
+- **Second row**: turtle facts under the left column, and Min, Avg and Max under the chart. The rule above the facts is level with the chart's bottom edge.
+- **Status strip**, full width along the bottom: whether the sensor is reachable and why not, the last successful reading and the last poll attempt, in four equal columns, then the "Show demo data" checkbox. The checkbox renders even while status is loading or the API is unreachable, so Demo can always be left.
+- **Below 1024 px wide** it is one column in reading order: reading and health, chart, statistics, facts, status.
 
 ### Status pill
 
@@ -331,6 +332,8 @@ A single centred column about 880 px wide, the same on desktop and mobile:
 | Otherwise | Online |
 
 Offline is checked before No data, so a sensor that fails on its first day shows the failure and its reason, not a wait message. A stale reading is dimmed and labelled as not current.
+
+The status is a square indicator on a dark chip in both themes: neon green for Online, neon red for Offline, amber for Stale and Demo, grey for No data. The neon colours sit on the chip, never on the light background, where they would be unreadable. The Sensor row in System status uses the same chip.
 
 ### Temperature health
 
@@ -356,21 +359,21 @@ Added after the build at the user's request. The latest reading is rated against
 ### Tailwind
 
 - **Setup.** `tailwindcss` and `@tailwindcss/vite`, the plugin added in `vite.config.js`, and `@import "tailwindcss";` in `web/src/index.css`. The documented Vite setup needs no `tailwind.config.js` and no PostCSS config.
-- **Tokens.** Colours and the font are defined once in an `@theme` block in `index.css`: background, surface, hairline, text, muted, accent, warning and danger. The default palette is removed so only these exist.
-- **Dark only.** The dark colours are the base tokens and no `dark:` variants are used, so the operating system's light or dark setting has no effect.
-- **Font.** The system font stack, so there is no font download.
-- **Class names.** Always complete static strings. Tailwind scans source as plain text and cannot see names built by concatenation.
-- **Hand-written CSS.** Limited to `index.css`: the import, the tokens and the demo override below.
+- **Tokens.** Colours and the fonts are defined once in an `@theme` block in `index.css`: background, surface, hairline, text, muted, accent, warning, the four health tones and their lighter scale fills, the status chip and its four indicator colours. The default palette is removed so only these exist. Every colour is a 6-digit hex, because the chart parses them.
+- **Light and dark.** The light colours are the base tokens. `:root[data-theme="dark"]` redefines them with the dark palette; no `dark:` variants are used. The theme follows the operating system, so it turns dark when the computer does at sunset, and is light when the system states no preference. The header switch overrides it and is saved in `localStorage`, but only while it differs from the system: the override is dropped when the system switches while the page is open, when the page loads and the system already agrees with it, or when the user picks the system's own theme. The page then follows the system again. An inline script in `index.html` sets `data-theme` before the first paint.
+- **Fonts.** Barlow (400, 500, 600) for text and Barlow Condensed (500, 600) for numerals and headings, latin subset, self-hosted as woff2 under `web/src/fonts` with their SIL Open Font License. Vite bundles them into `assets/`, so the dashboard still needs no internet access.
+- **Class names.** Always complete static strings. Tailwind scans source as plain text and cannot see names built by concatenation. Computed widths and positions, such as the health scale's, are inline styles.
+- **Hand-written CSS.** Limited to `index.css`: the import, the font faces, the tokens, and the theme and demo overrides below.
 
 ### One set of colours for the UI and the chart
 
 Chart.js draws on a canvas and cannot use utility classes. Tailwind emits its theme tokens as CSS custom properties on `:root`, so the chart reads the same variables with `getComputedStyle`. The tokens are declared static so that every one is emitted.
 
-In Demo mode the root element carries `data-mode="demo"`, and one CSS rule under that selector redefines the accent variable as the warning amber. Utilities pick it up through the cascade, and the chart re-reads the variable when the mode changes. The Tailwind docs do not describe this exact pattern, so it is checked in the first build; the fallback is switching between two explicit accent classes.
+In Demo mode the root element carries `data-mode="demo"`, and one CSS rule under that selector redefines the accent variable as the warning amber. Utilities pick it up through the cascade, and the chart re-reads the variables when the mode or theme changes. The Tailwind docs do not describe this exact pattern, so it is checked in the first build; the fallback is switching between two explicit accent classes.
 
 ### Colour and motion
 
-Near-black blue surfaces, one cool cyan-blue accent, amber for stale and demo, red for offline. Chart animations are off. The only transitions are short colour fades.
+Light theme: a pale grey-blue ground with ink text, and the ink as the accent. Dark theme: a green-black ground with pale text, and the pale text as the accent. Amber marks stale and demo in both. Every state word is colour-coded wherever it appears, always next to a word or icon so colour is never the only signal. All text colours meet 4.5:1 contrast. Chart animations are off. The only transitions are short colour fades.
 
 ### Chart
 
@@ -393,7 +396,7 @@ Near-black blue surfaces, one cool cyan-blue accent, amber for stale and demo, r
 - Status is fetched every 30 s. Fetching pauses while the tab is hidden and resumes at once when it is shown.
 - History is fetched only when the mode or range changes, or when status reports a newer reading.
 - A response that arrives after the mode or range has changed is discarded.
-- The mode is saved in `localStorage`.
+- The mode, unit and theme override are saved in `localStorage`. Real is the default mode.
 
 ### Files
 
@@ -564,6 +567,7 @@ Backend tests use `unittest` and Flask's test client. Frontend tests use `node -
 | Lockfile has `linux-arm64` entries for every native build package | Checked in the lockfile here; proven by the emulated build |
 | Clean shutdown on `SIGTERM` outside a container | Test |
 | Demo accent override reaches utilities and the chart | Browser check on the first build |
+| Theme switch and system theme reach utilities and the chart | Browser check |
 | Shelly integration | Mocked here; real sensor only |
 
 Docker became available on the development machine before the build, so every row marked "Docker here if enabled" was checked there. The backend tests were also run inside the production image. Rows marked for the Pi or the real sensor remain untested.
@@ -596,7 +600,8 @@ turtle-watch/
 │       ├── HistoryChart.jsx
 │       ├── util.js
 │       ├── util.test.js
-│       └── index.css         # Tailwind import and theme tokens
+│       ├── index.css         # Tailwind import, font faces, light and dark theme tokens
+│       └── fonts/            # Barlow and Barlow Condensed woff2, with OFL.txt
 ├── data/
 │   └── .gitkeep
 ├── docs/
@@ -637,7 +642,7 @@ The same `serve` command runs in development and production. Flask's debug mode 
 - **SD card.** It is the weakest part of the system. Local snapshots do not survive a dead card, so the off-device copy matters.
 - **Pi architecture.** Not yet checked on the actual Pi.
 - **Python dependencies.** Flask brings six transitive packages. They are pinned, and updates are a deliberate rebuild.
-- **Not built:** Shelly authentication, a Celsius toggle, alerts, multiple probes, gzip, automatic repair of a damaged database.
+- **Not built:** Shelly authentication, alerts, multiple probes, gzip, automatic repair of a damaged database.
 
 ## Build and hand-off
 

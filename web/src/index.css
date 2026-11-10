@@ -1,27 +1,68 @@
 @import "tailwindcss";
 
-/* The only colours in the app. `static` emits every token as a CSS variable,
-   because the chart reads them from JavaScript. */
+/* Barlow, SIL Open Font License (fonts/OFL.txt). Latin subset, bundled so the LAN dashboard needs no internet. */
+@font-face { font-family: "Barlow"; font-weight: 400; font-display: swap; src: url("./fonts/barlow-400.woff2") format("woff2"); }
+@font-face { font-family: "Barlow"; font-weight: 500; font-display: swap; src: url("./fonts/barlow-500.woff2") format("woff2"); }
+@font-face { font-family: "Barlow"; font-weight: 600; font-display: swap; src: url("./fonts/barlow-600.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 500; font-display: swap; src: url("./fonts/barlow-condensed-500.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 600; font-display: swap; src: url("./fonts/barlow-condensed-600.woff2") format("woff2"); }
+
+/* The only colours in the app; these are the light theme. `static` emits every token as a CSS
+   variable, because the chart reads them from JavaScript, so keep every colour a 6-digit hex. */
 @theme static {
   --color-*: initial;
-  --color-bg: #05080d;
-  --color-surface: #0a0f17;
-  --color-line: #1a2331;
-  --color-text: #e2e9f3;
-  --color-muted: #7c8899;
-  --color-accent: #4fb8dc;
-  --color-ok: #4fb8dc;
-  --color-warn: #e6b450;
-  --color-danger: #f0736e;
-  /* Water-temperature health. Kept apart from the connection colours above. */
-  --color-good: #5ccf86;
-  --color-fair: #b2d45c;
-  --color-caution: #ead85a;
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
-    Arial, sans-serif;
+  --color-bg: #e8edee;
+  --color-surface: #f6f8f8;
+  --color-line: #c2ccd0;
+  --color-text: #131b1f;
+  --color-muted: #4c5a61;
+  --color-accent: #131b1f;
+  --color-warn: #7c5100;
+  /* Water-temperature health. */
+  --color-good: #1d7447;
+  --color-fair: #57720f;
+  --color-caution: #715800;
+  --color-danger: #a8241c;
+  /* Health scale fills: lighter than the text tones above. */
+  --color-good-fill: #8fcca8;
+  --color-fair-fill: #c9dc86;
+  --color-caution-fill: #efcf6e;
+  --color-danger-fill: #eea097;
+  /* Connection status: neon indicators, only ever drawn on the dark chip. */
+  --color-chip: #131b1f;
+  --color-online: #39ff14;
+  --color-stale: #ffb000;
+  --color-offline: #ff3131;
+  --color-idle: #9aa5ab;
+  --font-sans: Barlow, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Barlow Condensed", Barlow, "Arial Narrow", sans-serif;
 }
 
-/* Demo mode recolours every accent utility and the chart line in one place. */
+:root {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: #070e0b;
+  --color-surface: #0e1612;
+  --color-line: #1c2924;
+  --color-text: #e4ebe7;
+  --color-muted: #94a39c;
+  --color-accent: #e4ebe7;
+  --color-warn: #f0b84a;
+  --color-good: #74d39d;
+  --color-fair: #c6da72;
+  --color-caution: #e6d25c;
+  --color-danger: #ff8f80;
+  --color-good-fill: #457e5e;
+  --color-fair-fill: #728147;
+  --color-caution-fill: #847d3b;
+  --color-danger-fill: #92584e;
+  --color-chip: #0e1612;
+}
+
+/* Demo mode recolours every accent utility and the chart line in one place. After the theme rule, so it wins. */
 :root[data-mode="demo"] {
   --color-accent: var(--color-warn);
 }
@@ -33,7 +74,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Turtle fact card: each fact fades in. */
+/* Turtle fact: each fact fades in. */
 @keyframes fact-fade {
   from { opacity: 0; }
   to { opacity: 1; }

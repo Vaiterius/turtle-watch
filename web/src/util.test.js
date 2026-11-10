@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  DAY, buildTicks, degreeRange, degrees, excursionText, formatAge, healthDetail, healthFor, isolatedFlags, toF,
+  DAY, buildTicks, degreeRange, degrees, excursionText, formatAge, healthDetail, healthFor, healthScale, isolatedFlags, toF,
   tzOffsetMinutes,
 } from './util.js'
 
@@ -70,4 +70,15 @@ test('isolated points are flagged', () => {
   assert.deepEqual(isolatedFlags([0, 300, 600, 2000, 5000, 5300], 450),
     [false, false, false, true, false, false])
   assert.deepEqual(isolatedFlags([42], 450), [true])
+})
+
+test('health scale spans the limits with a clamped marker', () => {
+  const t = [68, 70, 74, 79, 82]
+  const { bands, ticks, marker } = healthScale(t, 77)
+  assert.deepEqual(bands.map((b) => b.key), ['too-cold', 'too-cool', 'overnight', 'optimal', 'warm', 'too-warm'])
+  assert.ok(Math.abs(bands.reduce((sum, b) => sum + b.width, 0) - 100) < 1e-9)
+  assert.equal(ticks[0].at, 2 / 18 * 100)
+  assert.equal(marker, 11 / 18 * 100)
+  assert.equal(healthScale(t, 40).marker, 0)
+  assert.equal(healthScale(t, 99).marker, 100)
 })

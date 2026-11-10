@@ -3,10 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
-    <meta name="theme-color" content="#05080d" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#e8edee" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#070e0b" media="(prefers-color-scheme: dark)" />
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐢</text></svg>" />
-    <title>Turtlewatch</title>
+    <title>turtlewatch</title>
+    <script>
+      // Before first paint, so there is no flash: the saved choice, else the system setting, else light.
+      // A saved choice lasts only until the system agrees with it, so the page goes back to following
+      // the system. App.jsx keeps the same key and rule.
+      (function () {
+        var system = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        var saved
+        try {
+          saved = localStorage.getItem('turtlewatch.theme')
+          if (saved === system) localStorage.removeItem('turtlewatch.theme')
+        } catch (e) {}
+        document.documentElement.dataset.theme = saved === 'dark' || saved === 'light' ? saved : system
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

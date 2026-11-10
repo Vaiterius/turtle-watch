@@ -47,12 +47,13 @@ const optimalBand = {
   },
 }
 
-// `mode` is a dependency only so the colours are re-read when the accent changes.
-export default function HistoryChart({ history, mode, thresholds, tempUnit }) {
+// `mode` and `theme` are dependencies only so the colours are re-read when the tokens change.
+export default function HistoryChart({ history, mode, theme, thresholds, tempUnit }) {
   const canvas = useRef(null)
 
   useEffect(() => {
     const { points, start, end, step, bucket } = history
+    Chart.defaults.font.family = getComputedStyle(document.documentElement).getPropertyValue('--font-sans')
     const accent = token('accent')
     const muted = token('muted')
     const aggregated = bucket > 0
@@ -129,7 +130,7 @@ export default function HistoryChart({ history, mode, thresholds, tempUnit }) {
           },
         },
         plugins: {
-          optimalBand: { low, high, color: withAlpha(token('good'), 0.09) },
+          optimalBand: { low, high, color: withAlpha(token('good'), 0.14) },
           tooltip: {
             filter: (item) => item.datasetIndex === 0,
             // The swatch and the status line share the health colour, so it is never colour alone.
@@ -155,12 +156,12 @@ export default function HistoryChart({ history, mode, thresholds, tempUnit }) {
               labelTextColor: (item) => healthColor(item),
               labelColor: (item) => {
                 const color = healthColor(item)
-                return { borderColor: color, backgroundColor: color, borderWidth: 0, borderRadius: 2 }
+                return { borderColor: color, backgroundColor: color, borderWidth: 0, borderRadius: 0 }
               },
               footer: (items) => {
                 if (!aggregated || !items.length) return ''
                 const { lo, hi, n } = items[0].raw
-                return `${lo.toFixed(1)} to ${hi.toFixed(1)} °${tempUnit} · ${n} reading${n === 1 ? '' : 's'}`
+                return `${lo.toFixed(1)} to ${hi.toFixed(1)} °${tempUnit}, ${n} reading${n === 1 ? '' : 's'}`
               },
             },
           },
@@ -170,10 +171,11 @@ export default function HistoryChart({ history, mode, thresholds, tempUnit }) {
     })
     return () => chart.destroy()
     // Compared by value: each 30 s status refresh delivers a new but identical array.
-  }, [history, mode, thresholds.join(), tempUnit])
+  }, [history, mode, theme, thresholds.join(), tempUnit])
 
   return (
-    <div className="relative h-64 sm:h-80">
+    // Absolutely placed so the canvas never feeds the layout's height; the parent box sets the size.
+    <div className="absolute inset-3 sm:inset-4">
       <canvas ref={canvas} role="img" aria-label="Water temperature over time" />
     </div>
   )

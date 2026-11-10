@@ -45,7 +45,7 @@ The container restarts by itself after a crash or a reboot. A missing sensor doe
 
 ## Demo data
 
-The dashboard has a Real/Demo switch. Demo data lives in its own database, `data/demo.db`, and never touches real readings.
+The dashboard shows real readings by default; tick "Show demo data" under System status to switch to Demo. Demo data lives in its own database, `data/demo.db`, and never touches real readings.
 
 ```bash
 docker compose exec turtlewatch python main.py seed --days 30

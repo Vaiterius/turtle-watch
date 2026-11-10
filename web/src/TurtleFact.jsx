@@ -25,23 +25,24 @@ export default function TurtleFact() {
   }
 
   return (
-    <aside aria-label="Turtle fact" className="relative min-w-0 flex-1 rounded-xl border border-line bg-surface py-3 pr-11 pl-4">
-      <div className="text-xs tracking-wide text-muted uppercase">Turtle fact</div>
-      <p key={`${index}-${turn}`} className="fact-fade mt-1.5 text-sm leading-relaxed text-pretty">
+    <aside aria-label="Turtle facts" className="flex flex-col gap-1 border-t border-line pt-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-sm text-muted">Turtle facts</h2>
+        <button
+          type="button"
+          onClick={next}
+          className="-my-2 -mr-0.5 flex min-h-11 items-center gap-1.5 pl-3 text-sm font-semibold transition-opacity hover:opacity-70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text"
+        >
+          Next fact
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round"
+            strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
+            <path d="M5 12h14M13 6l6 6-6 6" />
+          </svg>
+        </button>
+      </div>
+      <p key={`${index}-${turn}`} className="fact-fade text-[15px] leading-normal text-pretty">
         {FACTS[index]}
       </p>
-      <button
-        type="button"
-        onClick={next}
-        aria-label="Next fact"
-        title="Next fact"
-        className="absolute right-2 bottom-2 flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors hover:text-text focus-visible:outline-2 focus-visible:outline-accent"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
-          strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
-          <path d="M5 12h14M13 6l6 6-6 6" />
-        </svg>
-      </button>
     </aside>
   )
 }

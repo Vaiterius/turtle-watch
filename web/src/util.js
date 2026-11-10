@@ -7,7 +7,7 @@ export const toF = (celsius) => (celsius * 9) / 5 + 32
 // Display unit, 'F' or 'C'. Readings arrive in °C and limits are configured in °F;
 // both are converted to °F once, then to the display unit only when shown.
 export const fromF = (f, unit) => (unit === 'C' ? ((f - 32) * 5) / 9 : f)
-const short = (f, unit) => String(Number(fromF(f, unit).toFixed(1)))
+export const short = (f, unit) => String(Number(fromF(f, unit).toFixed(1)))
 export const degrees = (f, unit) => `${short(f, unit)} °${unit}`
 export const degreeRange = (a, b, unit) => `${short(a, unit)}–${short(b, unit)} °${unit}`
 
@@ -15,13 +15,28 @@ export const degreeRange = (a, b, unit) => `${short(a, unit)}–${short(b, unit)
 export const tzOffsetMinutes = (date = new Date()) => -date.getTimezoneOffset()
 
 // Water-temperature health. Thresholds come from the server: five ascending °F limits.
+// In order from coldest to warmest; `scale` is the shorter label under the health scale.
 export const HEALTH = {
-  'too-cold': { label: 'Too cold', tone: 'danger', icon: 'alert' },
-  'too-cool': { label: 'Caution: too cool', tone: 'caution', icon: 'down' },
-  overnight: { label: 'Acceptable overnight', tone: 'fair', icon: 'moon' },
-  optimal: { label: 'Optimal', tone: 'good', icon: 'check' },
-  warm: { label: 'Above optimal', tone: 'caution', icon: 'up' },
-  'too-warm': { label: 'Too warm', tone: 'danger', icon: 'alert' },
+  'too-cold': { label: 'Too cold', scale: 'Too cold', tone: 'danger', icon: 'alert' },
+  'too-cool': { label: 'Caution: too cool', scale: 'Too cool', tone: 'caution', icon: 'down' },
+  overnight: { label: 'Acceptable overnight', scale: 'Overnight', tone: 'fair', icon: 'moon' },
+  optimal: { label: 'Optimal', scale: 'Optimal', tone: 'good', icon: 'check' },
+  warm: { label: 'Above optimal', scale: 'Above optimal', tone: 'caution', icon: 'up' },
+  'too-warm': { label: 'Too warm', scale: 'Too warm', tone: 'danger', icon: 'alert' },
+}
+
+// The scale under the reading: one band per rating, 2 °F of margin past the outer limits.
+// Positions are percentages; the marker is clamped so an extreme reading sits at the end.
+export function healthScale(thresholds, tempF) {
+  const lo = thresholds[0] - 2
+  const hi = thresholds[4] + 2
+  const at = (f) => ((f - lo) / (hi - lo)) * 100
+  const edges = [lo, ...thresholds, hi]
+  return {
+    bands: Object.keys(HEALTH).map((key, i) => ({ key, width: at(edges[i + 1]) - at(edges[i]) })),
+    ticks: thresholds.map((f) => ({ f, at: at(f) })),
+    marker: Math.min(100, Math.max(0, at(tempF))),
+  }
 }
 
 // Classified on the value as displayed (one decimal), so 73.96 shown as 74.0 reads Optimal.
