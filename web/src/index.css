@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+/* The only colours in the app. `static` emits every token as a CSS variable,
+   because the chart reads them from JavaScript. */
+@theme static {
+  --color-*: initial;
+  --color-bg: #0a1013;
+  --color-surface: #111a1f;
+  --color-line: #22303a;
+  --color-text: #e7eef1;
+  --color-muted: #8c9ca6;
+  --color-accent: #4fc9a4;
+  --color-ok: #4fc9a4;
+  --color-warn: #e6b450;
+  --color-danger: #f0736e;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+}
+
+/* Demo mode recolours every accent utility and the chart line in one place. */
+:root[data-mode="demo"] {
+  --color-accent: var(--color-warn);
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}

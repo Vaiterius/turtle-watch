@@ -4,15 +4,18 @@ Self-hosted water-temperature monitor for an outdoor turtle tank. A Raspberry Pi
 
 ## Status
 
-As of 2026-11-10: planning only. `docs/PLAN.md` is written and awaiting the user's approval. No application code exists. Update this section when that changes.
+As of 2026-11-10: built and tested on the development machine, including the Docker image and an emulated ARM64 build. Not yet deployed to the Pi, and never tested against a real Shelly Pill. The application code is not committed to git.
+
+## Commands
+
+- Backend tests: `.venv/bin/python -m unittest discover -s backend` (the venv was made with `uv venv`; plain `python3 -m venv` is not installed on this machine).
+- Frontend tests and build: `cd web && npm test && npm run build`.
+- Run locally: `.venv/bin/python backend/main.py serve` (serves `web/dist` on :8000).
+- Image: `docker compose up -d --build`.
 
 ## Source of truth
 
 `docs/PLAN.md` holds the architecture and every design decision. Read it before changing anything. If the code and the plan disagree, raise it with the user.
-
-## How the build runs
-
-Do not start building until the user explicitly approves the plan. After approval, implement the whole application in one continuous pass, with no milestones and no approval stops between features. End with the report listed under "Build and hand-off" in the plan.
 
 ## Decisions the user made
 

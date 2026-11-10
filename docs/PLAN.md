@@ -1,6 +1,6 @@
 # Turtlewatch: architecture and implementation plan
 
-**Status:** draft awaiting approval, written 2026-11-10. No application code exists yet.
+**Status:** approved and implemented on 2026-11-10. Verified on the development machine, including Docker and an emulated ARM64 build; not yet run on the Pi or against a real Pill.
 
 Turtlewatch is a self-hosted water-temperature monitor for an outdoor turtle tank. A Shelly Pill with a waterproof DS18B20 probe sits on the home Wi-Fi. A Raspberry Pi 4 polls it every five minutes, stores the readings in SQLite, and serves a dashboard to a PC or phone on the same network. The sensor hardware has not arrived, so everything must be buildable and testable with simulated data.
 
@@ -138,7 +138,7 @@ The final image has Python, Flask and Waitress, and no Node.
 - `web/package-lock.json` locks the frontend. It is generated from a clean install so that it contains the ARM64 entries for every native build package.
 - `backend/requirements.txt` pins Flask, Waitress and the full transitive set. It is generated once during implementation with `pip freeze` from a clean virtual environment and committed to the repository, not written by hand. The Docker build only installs from it.
 
-**Size and speed.** Estimated image size is 70–80 MB. The first build on a Pi 4 is estimated at a few minutes. Both are estimates until measured.
+**Size and speed.** The image measures 82.5 MB (the estimate was 70–80 MB). The first build on a Pi 4 is estimated at a few minutes. Both are estimates until measured.
 
 **Assets.** Hashed files under `/assets` are served with long-lived immutable caching; `index.html` is served with `no-cache`. Gzip is skipped: the JavaScript bundle is an estimated 350–400 KB and Tailwind's output is a few kilobytes, which is fine on a LAN.
 
@@ -534,7 +534,7 @@ Backend tests use `unittest` and Flask's test client. Frontend tests use `node -
 | Stale clearly indicated | Test for the flag; browser check with a scratch database |
 | Data survives container recreation | Docker here if enabled, otherwise the Pi |
 | Permissions as non-root | Docker here if enabled, otherwise the Pi |
-| Restarts after a crash | Docker here if enabled, with `docker compose exec turtlewatch kill -TERM 1`; on the Pi, with `sudo kill -9` on the container's host PID |
+| Restarts after a crash | Done on the development machine two ways: `docker compose exec turtlewatch kill -TERM 1`, and `kill -9` on the host PID from a privileged `--pid=host` helper container. On the Pi, `sudo kill -9` on the container's host PID |
 | `docker compose stop` exits with code 0 inside the grace period, not 137 | Docker here if enabled, otherwise the Pi |
 | Starts after a Pi reboot | Pi only |
 | Reachable from another LAN device | Pi only |
@@ -545,7 +545,7 @@ Backend tests use `unittest` and Flask's test client. Frontend tests use `node -
 | Demo accent override reaches utilities and the chart | Browser check on the first build |
 | Shelly integration | Mocked here; real sensor only |
 
-Docker is not currently reachable from the development WSL distro. Until Docker Desktop's WSL integration is enabled, every row marked "Docker here if enabled" is verified on the Pi and reported as untested.
+Docker became available on the development machine before the build, so every row marked "Docker here if enabled" was checked there. The backend tests were also run inside the production image. Rows marked for the Pi or the real sensor remain untested.
 
 The crash check never uses `docker stop` or `docker kill`. Docker treats those as a manual stop and skips the restart policy, so the process is made to exit by other means.
 
@@ -672,5 +672,4 @@ Not confirmed:
 
 - Two Shelly community threads returned 403, so a claim that Pill component IDs start at 200 is unverified.
 - The hostname and `.local` behaviour come from a search summary, not from a Pi.
-- The `node:24-alpine` and `python:3.14-alpine` tags have not been checked against the registry, because Docker is not yet available on the development machine.
-- Docker's treatment of `docker stop` and `docker kill` as manual stops is from memory, and the crash check itself will confirm it.
+- Docker's treatment of `docker stop` and `docker kill` as manual stops is from memory. The crash checks avoided both and Docker restarted the container each time.
