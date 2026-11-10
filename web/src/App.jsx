@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import HistoryChart from './HistoryChart.jsx'
+import TurtleFact from './TurtleFact.jsx'
 import {
   HEALTH, degreeRange, excursionText, fetchJson, formatAge, formatDateTime, formatTime, fromF, healthDetail, healthFor,
   toF, tzOffsetMinutes,
@@ -144,8 +145,10 @@ function Hero({ mode, status, unit }) {
   const pill = pillFor(mode, status)
   const notCurrent = mode === 'real' && reading?.stale
   const empty = reading ? null : emptyMessage(mode, sensor)
+  // Reading on the left; the fact card fills the right and sits on the hero's bottom edge, just above the chart.
   return (
-    <section className="py-10">
+    <section className="flex flex-col gap-6 pt-10 pb-6 sm:flex-row sm:items-end sm:gap-8">
+     <div className="min-w-0 sm:max-w-[60%] sm:shrink-0">
       <div className={`flex items-center gap-2 text-sm font-medium ${PILL[pill]}`}>
         <span className="h-2 w-2 rounded-full bg-current" aria-hidden="true" />
         {pill}
@@ -188,6 +191,8 @@ function Hero({ mode, status, unit }) {
           )}
         </p>
       )}
+     </div>
+      <TurtleFact />
     </section>
   )
 }

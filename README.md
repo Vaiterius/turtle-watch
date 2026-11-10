@@ -149,6 +149,10 @@ These are conservative defaults for routine care of an adult red-eared slider, n
 
 **Units.** The °F/°C switch in the header changes only the display, and the browser remembers it. Readings are stored in °C and the limits are set in °F.
 
+## Turtle facts
+
+A small card on the dashboard shows a red-eared slider fact, changing every 7 seconds in random order; the arrow button skips ahead. The facts are a plain JSON list in `web/src/facts.json`. To add your own, edit that file and run `docker compose up -d --build`.
+
 ## Development
 
 No Docker or hardware needed. Python 3.13 or newer and Node 22 or newer.

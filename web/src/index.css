@@ -32,3 +32,13 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
+
+/* Turtle fact card: each fact fades in. */
+@keyframes fact-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.fact-fade { animation: fact-fade 600ms ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .fact-fade { animation: none; }
+}
